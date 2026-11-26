@@ -19,10 +19,42 @@ const guns=[
  {name:"Импульсник «Ливень»",color:"#ff92d9",delay:.065,speed:17,damage:2,spread:[0],price:290,desc:"Непрерывная очередь из компактного эмиттера."}
 ];
 const gleb={x:.5,y:9.8,trader:true};
-function nearGleb(){return Math.hypot(player.x-gleb.x,player.y-gleb.y)<2}
+let locationId=1;
+const depot={
+ // x, y, width, depth of the maintenance walkways, in world tiles.
+ decks:[[0,7,7,4],[5,1,3,17],[6,1,15,3],[6,15,15,3],[18,2,3,15],[24,6,4,7]],
+ bridge:[8,8,16,2], pumps:[{x:18,y:2},{x:18,y:16}], exit:{x:26,y:9},
+ starts:[[3,9],[7,2],[7,16],[19,8],[17,3],[17,16]]
+};
+let pumpProgress=[0,0];
+function drained(){return pumpProgress.every(v=>v>=1)}
+function insideRect(x,y,[rx,ry,w,h]){return x>=rx&&y>=ry&&x<=rx+w&&y<=ry+h}
+function enterDepot(){
+ locationId=2;navKey=-1;pumpProgress=[0,0];player.x=2;player.y=9;player.safe=2;player.moving=false;
+ camera.x=368+(player.x-player.y)*48;camera.y=93+(player.x+player.y)*22-12;
+ foes=[];shots=[];items=[];fx=[];rings=[];stains=[];blasts=[];
+ barrels=[[6,4],[12,3],[7,14],[16,16],[19,12]].map(([x,y])=>({x,y,live:true}));
+ round=2;quota=8;spawned=0;spawnIn=1.8;nextIn=0;streak=0;comboTime=0;shake=0;
+}
+function depotMission(dt){
+ for(let i=0;i<2;i++){
+  const pump=depot.pumps[i];if(pumpProgress[i]>=1)continue;
+  if(Math.hypot(player.x-pump.x,player.y-pump.y)<1.05){
+   pumpProgress[i]=Math.min(1,pumpProgress[i]+dt);
+   if(pumpProgress[i]===1){quota+=6;navKey=-1;tone(260,780,.35,"triangle")}
+  }else pumpProgress[i]=0
+ }
+}
+function depotHint(){
+ const n=pumpProgress.filter(v=>v>=1).length;
+ if(n<2){const active=pumpProgress.find(v=>v>0&&v<1);return active?"Пуск насоса · "+Math.round(active*100)+"%":"Депо · Подойди к насосам A и B · "+n+"/2"}
+ return "Депо · Переход открыт. К платформе Э!"
+}
+function nearGleb(){return locationId===1&&Math.hypot(player.x-gleb.x,player.y-gleb.y)<2}
 function cacheCount(){return caches.filter(c=>player.owned.includes(c.slot)).length}
 const caches=[{x:8,y:12,slot:1,place:"Рынок"},{x:32,y:5,slot:2,place:"Подстанция"}];
 function road(x,y){
+ if(locationId===2)return depot.decks.some(r=>insideRect(x,y,r))||drained()&&insideRect(x,y,depot.bridge);
  if(x<-.85&&y>8.5&&y<10.05)return false;
  return x>=min&&y>=min&&x<=bounds.x&&y<=bounds.y&&(avenues.some(v=>Math.abs(x-v)<=2.1)||streets.some(v=>Math.abs(y-v)<=2.1))
 }
@@ -64,14 +96,15 @@ function tone(freq,end,length,type,vol=.055){
  const a=audioContext,o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.setValueAtTime(freq,a.currentTime);o.frequency.exponentialRampToValueAtTime(end,a.currentTime+length);g.gain.setValueAtTime(vol,a.currentTime);g.gain.exponentialRampToValueAtTime(.0001,a.currentTime+length);o.connect(g);g.connect(a.destination);o.start();o.stop(a.currentTime+length)
 }
 function awaken(){if(mode==="ready")mode="play";if(sound){try{audioContext??=new AudioContext();if(audioContext.state==="suspended")audioContext.resume().catch(()=>{})}catch{}}}
-function reset(){if(typeof resetVendor==="function")resetVendor();navKey=-1;camera.x=286;camera.y=172;mouse.seen=false;barrels=freshBarrels();blasts=[];player={x:.6,y:0,owned:[0],credits:100,slot:0,hp:100,charge:100,fire:0,dash:0,safe:0,dx:.707,dy:-.707,face:1,moving:false,lookAngle:0,lookIndex:0};foes=[];shots=[];fx=[];stains=[];rings=[];items=[];round=1;quota=waveSizes[0];spawned=kills=points=streak=comboTime=spawnIn=nextIn=time=shake=serial=0;mode="ready";keys.clear();mouse.down=false;for(let i=0;i<4;i++)spawn();document.querySelector("#result").hidden=true;hud()}
-function hud(){document.querySelector("#wave").textContent=cacheCount()===0?"Найди оружие на рынке или подстанции":cacheCount()===1?"Найди второй тайник":"К метро · "+Math.round(Math.hypot(player.x-48,player.y-24)*4)+" м";document.querySelector("#gun").textContent=(player.slot+1)+" · "+guns[player.slot].name;document.querySelector("#money").textContent="₡ "+player.credits;document.querySelector("#trade").disabled=!nearGleb()||mode!=="play";document.querySelector("#health").textContent="♥ "+Math.ceil(player.hp)+" / 100";document.querySelector("#charge").textContent="ИМПУЛЬС "+Math.floor(player.charge)+"%";document.querySelector("#score").textContent=String(points).padStart(6,"0")+(streak>1?"   ×"+streak:"")}
-function finish(win){mode=win?"win":"lost";let el=document.querySelector("#result");el.hidden=false;el.querySelector("span").textContent=(win?"МЕТРО ОТКРЫТО":"СМЕНА ОКОНЧЕНА")+" · "+kills+" убито · "+points+" очков";tone(win?260:120,win?780:28,.55,"sawtooth")}
+function reset(){locationId=1;pumpProgress=[0,0];if(typeof resetVendor==="function")resetVendor();navKey=-1;camera.x=286;camera.y=172;mouse.seen=false;barrels=freshBarrels();blasts=[];player={x:.6,y:0,owned:[0],credits:100,slot:0,hp:100,charge:100,fire:0,dash:0,safe:0,dx:.707,dy:-.707,face:1,moving:false,lookAngle:0,lookIndex:0};foes=[];shots=[];fx=[];stains=[];rings=[];items=[];round=1;quota=waveSizes[0];spawned=kills=points=streak=comboTime=spawnIn=nextIn=time=shake=serial=0;mode="ready";keys.clear();mouse.down=false;for(let i=0;i<4;i++)spawn();document.querySelector("#result").hidden=true;hud()}
+function hud(){document.querySelector("#wave").textContent=locationId===2?depotHint():cacheCount()===0?"Найди оружие на рынке или подстанции":cacheCount()===1?"Найди второй тайник":"К метро · "+Math.round(Math.hypot(player.x-48,player.y-24)*4)+" м";document.querySelector("#gun").textContent=(player.slot+1)+" · "+guns[player.slot].name;document.querySelector("#money").textContent="₡ "+player.credits;document.querySelector("#trade").disabled=!nearGleb()||mode!=="play";document.querySelector("#health").textContent="♥ "+Math.ceil(player.hp)+" / 100";document.querySelector("#charge").textContent="ИМПУЛЬС "+Math.floor(player.charge)+"%";document.querySelector("#score").textContent=String(points).padStart(6,"0")+(streak>1?"   ×"+streak:"")}
+function finish(win){mode=win?"win":"lost";let el=document.querySelector("#result");el.hidden=false;el.querySelector("span").textContent=(win?"ЭВАКУАЦИЯ ЗАВЕРШЕНА":"СМЕНА ОКОНЧЕНА")+" · "+kills+" убито · "+points+" очков";tone(win?260:120,win?780:28,.55,"sawtooth")}
 const waveSizes=[24,32,40];
 function spawn(){
  const ahead=spawned%5!==4, offset=ahead?rnd(4.2,7.2):-rnd(3,5);
  let c;
  for(let j=0;j<12;j++){const a=j*Math.PI/6+spawned*2.4,px=player.x+Math.cos(a)*offset,py=player.y+Math.sin(a)*offset;if(road(px,py)){c=[px,py];break}}
+ if(!c&&locationId===2)c=depot.starts.reduce((a,b)=>Math.abs(Math.hypot(b[0]-player.x,b[1]-player.y)-6)<Math.abs(Math.hypot(a[0]-player.x,a[1]-player.y)-6)?b:a);
  if(!c)c=[avenues.reduce((a,b)=>Math.abs(b-player.x)<Math.abs(a-player.x)?b:a),clamp(player.y+offset,min,bounds.y)];
  const pattern=spawned%10;
  const boss=round===3&&spawned===0;
@@ -132,7 +165,7 @@ function fire(){
 }
 function step(dt){if(mode!=="play")return;time+=dt;const p=player;for(const k of ["fire","safe","dash"])p[k]=Math.max(0,p[k]-dt);p.charge=Math.min(100,p.charge+dt*3);shake=Math.max(0,shake-dt*22);comboTime-=dt;if(comboTime<=0)streak=0;
  const h=Number(keys.has("KeyD")||keys.has("ArrowRight"))-Number(keys.has("KeyA")||keys.has("ArrowLeft")),v=Number(keys.has("KeyS")||keys.has("ArrowDown"))-Number(keys.has("KeyW")||keys.has("ArrowUp"));const dx=h+v,dy=v-h,len=Math.hypot(dx,dy);p.moving=!!len;if(len){p.dx=dx/len;p.dy=dy/len;moveActor(p,p.dx*3.45*dt,p.dy*3.45*dt);if(h)p.face=h>0?1:2}
- collect();
+ if(locationId===2)depotMission(dt);else collect();
  if((mouse.down||keys.has("Space"))&&p.fire<=0)fire();
  for(const e of foes){if(e.hp<=0)continue;e.flash-=dt;e.strike-=dt;e.attack-=dt;e.walking=false;let dx=p.x-e.x,dy=p.y-e.y,d=Math.hypot(dx,dy)||.01;let speed=e.boss?.66:e.heavy?.72:1.02+.08*round;
  if(e.kind==="medic"&&e.attack<=0){
@@ -176,7 +209,8 @@ function step(dt){if(mode!=="play")return;time+=dt;const p=player;for(const k of
   for(let i=0;i<group;i++)spawn();
   spawnIn=round===1?1.1:.95
  }
- if(mode==="play"&&spawned===quota&&foes.length===0){
+ if(mode==="play"&&locationId===2&&drained()&&Math.hypot(p.x-depot.exit.x,p.y-depot.exit.y)<1.2){finish(true)}
+ if(mode==="play"&&locationId===1&&spawned===quota&&foes.length===0){
   if(round<3){
    nextIn+=dt;
    if(nextIn>1.2){
@@ -184,7 +218,7 @@ function step(dt){if(mode!=="play")return;time+=dt;const p=player;for(const k of
     p.hp=Math.min(100,p.hp+18);p.charge=100
    }
   }else if(cacheCount()===2&&Math.hypot(p.x-48,p.y-24)<2){
-   finish(true)
+   enterDepot()
   }
  }
  hud()
@@ -377,6 +411,58 @@ function cityBlock(x,y,i){
   solid(xx,yy,.7,.7,3,5,"#697572","#525c63","#43515b");let [px,py]=xy(xx+.35,yy+.35,7);rect(px-2,py-19,4,20,"#514651");ellipse(px,py-23,13,11,"#47675f");ellipse(px-4,py-26,8,7,"#608879")
  }
 }
+function drawDepot(t){
+ const [x,y]=xy(player.x,player.y);rect(x-1400,y-800,2800,1600,"#12242d");
+ const level=-6-4*pumpProgress.reduce((a,b)=>a+b,0);
+ plate(-4,-3,36,26,level,drained()?"#21464e":"#24515b");
+ for(let n=0;n<7;n++){
+  const wx=1+n*4;
+  solid(wx,-1.7,.4,.55,-7,52,"#879a96","#485c64","#324650");
+  const [lx,ly]=xy(wx,-1.6,39);rect(lx-4,ly-5,9,11,"#344953");rect(lx-2,ly-4,5,8,"#f6cc93");
+ }
+
+ for(let i=0;i<95;i++){
+  const rx=-3+((i*7.41+t*.00023)%33),ry=-2+(i*4.61)%23;
+  plate(rx,ry,.32+(i%5)*.15,.035,level+.4,"#44818a")
+ }
+ // Two stalled trains sit below the elevated service walkways.
+ for(const ty of [4.7,11.7]){
+  for(const rail of [ty+.2,ty+1.3])plate(8,rail,9,.09,-4,"#769295");
+  for(let i=0;i<2;i++){
+   const tx=8.7+i*4.3;solid(tx,ty,4,1.55,-4,19,"#7b9393","#39616a","#354d58");
+   for(let v=0;v<3;v++){
+    solid(tx+.35+v*1.25,ty+.45,.47,.46,15,3,"#9eb1ac","#687e80","#475e65");
+    for(let j=0;j<3;j++)plate(tx+.38+v*1.25+j*.12,ty+.48,.045,.33,18.2,"#556d70")
+   }
+   wall(tx,ty+1.55,15,false,()=>{rect(0,11,192,4,"#e69a5f");for(let k=6;k<177;k+=25){rect(k,3,19,7,"#203f50");rect(k+2,4,12,2,"#8bbab9")}})
+  }
+ }
+ function deck(r,bridge){
+  const [dx,dy,w,h]=r;solid(dx,dy,w,h,-5,5,bridge?"#718c85":"#65747b","#394a54","#2f424a");
+  for(let n=1;n<w;n++)line([xy(dx+n,dy,.2),xy(dx+n,dy+h,.2)],"#596871",1);
+  for(let n=1;n<h;n++)line([xy(dx,dy+n,.2),xy(dx+w,dy+n,.2)],"#596871",1);
+  for(let n=0;n<w;n+=2)for(let j=0;j<h;j++)plate(dx+n+.08,dy+j+.09,.048,.05,.3,"#a5aeab");
+  for(let n=0;n<w;n++){plate(dx+n,dy,.38,.09,.1,"#deb56e");plate(dx+n,dy+h-.1,.38,.09,.1,"#deb56e")}
+  for(let n=0;n<h;n++)plate(dx,dy+n,.11,.45,.1,"#deb56e")
+ }
+ depot.decks.forEach(r=>deck(r,false));if(drained())deck(depot.bridge,true);
+ depot.pumps.forEach((p,i)=>{
+  const c=pumpProgress[i]===1?"#8affca":"#ffc376";
+  solid(p.x-.52,p.y-.52,.66,.7,0,18,"#8fa29c","#537481","#355464");
+  const [px,py]=xy(p.x-.2,p.y-.2,20);ellipse(px,py,9,5,c);text(px-4,py+2,String.fromCharCode(65+i),"#253c40",11);
+  const [sx,sy]=xy(p.x,p.y);ellipse(sx,sy,28,12,c,true)
+ });
+ const [ex,ey]=xy(26,9);rect(ex-38,ey-54,3,47,"#394f55");rect(ex+31,ey-54,3,64,"#394f55");
+ rect(ex-47,ey-74,90,22,"#28353c");text(ex-42,ey-59,"ЭВАКУАЦИЯ",drained()?"#96ffbe":"#bbb59d",14);
+}
+function depotMap(){
+ const x=canvas.width-181,y=15,k=5.3,originX=x+9,originY=y+24;
+ rect(x-5,y-5,175,140,"#11262def");text(x+3,y+9,"ЗАТОПЛЕННОЕ ДЕПО","#b3e1dc",12);
+ for(const [rx,ry,w,h] of [...depot.decks,...(drained()?[depot.bridge]:[])])rect(originX+rx*k,originY+ry*k,w*k,h*k,"#768c91");
+ depot.pumps.forEach((p,i)=>text(originX+p.x*k-3,originY+p.y*k+4,i?"B":"A",pumpProgress[i]===1?"#99ffd0":"#ffcf80",13));
+ text(originX+26*k-3,originY+9*k+4,"Э","#a6ffd0",13);
+ ellipse(originX+player.x*k,originY+player.y*k,4,4,"#fff6d6")
+}
 function baseScene(t){
  const [px,py]=xy(player.x,player.y);rect(px-1500,py-900,3000,1800,"#202c37");
  plate(-18,-14,84,52,0,"#293440");
@@ -538,11 +624,11 @@ function draw(t){
  ctx.save();ctx.imageSmoothingEnabled=false;
  ctx.translate(480,270);ctx.scale(camera.zoom,camera.zoom);ctx.translate(-camera.x,-camera.y);
  if(shake>.1&&mode==="play")ctx.translate(rnd(-shake,shake)*.55,rnd(-shake,shake)*.55);
- baseScene(t);
+ if(locationId===2)drawDepot(t);else baseScene(t);
  for(let s of stains){let [x,y]=xy(s.x,s.y);ellipse(x,y,s.r,s.r*.45,"#751d39")}
  for(let i of items){let [x,y]=xy(i.x,i.y,4);rect(x-8,y-8,16,12,"#d5dbaf");rect(x-2,y-7,4,9,"#bd3244");rect(x-5,y-4,10,3,"#bd3244")}
  for(let r of rings){let [x,y]=xy(r.x,r.y,1),k=r.t/.45;ctx.globalAlpha=1-k;ellipse(x,y,217*k,99*k,"#a2ffd1",true);ctx.globalAlpha=1}
- let actors=[...barrels.filter(b=>b.live),...foes,van,gleb,player].sort((a,b)=>a.x+a.y-b.x-b.y);
+ let actors=[...barrels.filter(b=>b.live),...foes,...(locationId===1?[van,gleb]:[]),player].sort((a,b)=>a.x+a.y-b.x-b.y);
  for(let a of actors){if(a.hp<=0)continue;let [x,y]=xy(a.x,a.y),isPlayer=a===player;
  if(a.vehicle){drawVan(x,y);continue}
  if(a.trader){drawTrader(x,y,t);continue}
@@ -568,7 +654,7 @@ function draw(t){
  for(let b of blasts){const [x,y]=xy(b.x,b.y,5),k=b.t/.45;ctx.globalAlpha=1-k;ellipse(x,y,12+115*k,6+54*k,"#ffbd69",true);ellipse(x,y-15-27*k,9+29*(1-k),9+29*(1-k),"#fff0b4");ctx.globalAlpha=1} for(let f of fx){let [x,y]=xy(f.x,f.y,f.z);rect(x,y,f.size,f.size,f.ink)}
  if(streak>1&&comboTime>0){let [x,y]=xy(player.x,player.y,73);text(x-14,y,"×"+streak,"#ffcd78",18)}
  ctx.restore();
- miniMap();
+ if(locationId===2)depotMap();else miniMap();
  if(mode==="ready"){rect(18,15,362,50,"#171924eb");rect(18,15,4,50,"#fc6666");text(31,36,"ПРОРЫВ К МЕТРО","#ff967f",18);text(31,55,"Найди тайники 2 и 3. Выход — метро М.","#e8e0cd",12)}
 }
 function updateLook(dt){

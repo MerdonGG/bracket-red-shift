@@ -15,10 +15,42 @@ const guns=[
  {name:"Импульсник «Ливень»",color:"#ff92d9",delay:.065,speed:17,damage:2,spread:[0],price:290,desc:"Непрерывная очередь из компактного эмиттера."}
 ];
 const gleb={x:.5,y:9.8,trader:true};
-function nearGleb(){return Math.hypot(player.x-gleb.x,player.y-gleb.y)<2}
+let locationId=1;
+const depot={
+ // x, y, width, depth of the maintenance walkways, in world tiles.
+ decks:[[0,7,7,4],[5,1,3,17],[6,1,15,3],[6,15,15,3],[18,2,3,15],[24,6,4,7]],
+ bridge:[8,8,16,2], pumps:[{x:18,y:2},{x:18,y:16}], exit:{x:26,y:9},
+ starts:[[3,9],[7,2],[7,16],[19,8],[17,3],[17,16]]
+};
+let pumpProgress=[0,0];
+function drained(){return pumpProgress.every(v=>v>=1)}
+function insideRect(x,y,[rx,ry,w,h]){return x>=rx&&y>=ry&&x<=rx+w&&y<=ry+h}
+function enterDepot(){
+ locationId=2;navKey=-1;pumpProgress=[0,0];player.x=2;player.y=9;player.safe=2;player.moving=false;
+ camera.x=368+(player.x-player.y)*48;camera.y=93+(player.x+player.y)*22-12;
+ foes=[];shots=[];items=[];fx=[];rings=[];stains=[];blasts=[];
+ barrels=[[6,4],[12,3],[7,14],[16,16],[19,12]].map(([x,y])=>({x,y,live:true}));
+ round=2;quota=8;spawned=0;spawnIn=1.8;nextIn=0;streak=0;comboTime=0;shake=0;
+}
+function depotMission(dt){
+ for(let i=0;i<2;i++){
+  const pump=depot.pumps[i];if(pumpProgress[i]>=1)continue;
+  if(Math.hypot(player.x-pump.x,player.y-pump.y)<1.05){
+   pumpProgress[i]=Math.min(1,pumpProgress[i]+dt);
+   if(pumpProgress[i]===1){quota+=6;navKey=-1;tone(260,780,.35,"triangle")}
+  }else pumpProgress[i]=0
+ }
+}
+function depotHint(){
+ const n=pumpProgress.filter(v=>v>=1).length;
+ if(n<2){const active=pumpProgress.find(v=>v>0&&v<1);return active?"Пуск насоса · "+Math.round(active*100)+"%":"Депо · Подойди к насосам A и B · "+n+"/2"}
+ return "Депо · Переход открыт. К платформе Э!"
+}
+function nearGleb(){return locationId===1&&Math.hypot(player.x-gleb.x,player.y-gleb.y)<2}
 function cacheCount(){return caches.filter(c=>player.owned.includes(c.slot)).length}
 const caches=[{x:8,y:12,slot:1,place:"Рынок"},{x:32,y:5,slot:2,place:"Подстанция"}];
 function road(x,y){
+ if(locationId===2)return depot.decks.some(r=>insideRect(x,y,r))||drained()&&insideRect(x,y,depot.bridge);
  if(x<-.85&&y>8.5&&y<10.05)return false;
  return x>=min&&y>=min&&x<=bounds.x&&y<=bounds.y&&(avenues.some(v=>Math.abs(x-v)<=2.1)||streets.some(v=>Math.abs(y-v)<=2.1))
 }
@@ -60,14 +92,15 @@ function tone(freq,end,length,type,vol=.055){
  const a=audioContext,o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.setValueAtTime(freq,a.currentTime);o.frequency.exponentialRampToValueAtTime(end,a.currentTime+length);g.gain.setValueAtTime(vol,a.currentTime);g.gain.exponentialRampToValueAtTime(.0001,a.currentTime+length);o.connect(g);g.connect(a.destination);o.start();o.stop(a.currentTime+length)
 }
 function awaken(){if(mode==="ready")mode="play";if(sound){try{audioContext??=new AudioContext();if(audioContext.state==="suspended")audioContext.resume().catch(()=>{})}catch{}}}
-function reset(){if(typeof resetVendor==="function")resetVendor();navKey=-1;camera.x=286;camera.y=172;mouse.seen=false;barrels=freshBarrels();blasts=[];player={x:.6,y:0,owned:[0],credits:100,slot:0,hp:100,charge:100,fire:0,dash:0,safe:0,dx:.707,dy:-.707,face:1,moving:false,lookAngle:0,lookIndex:0};foes=[];shots=[];fx=[];stains=[];rings=[];items=[];round=1;quota=waveSizes[0];spawned=kills=points=streak=comboTime=spawnIn=nextIn=time=shake=serial=0;mode="ready";keys.clear();mouse.down=false;for(let i=0;i<4;i++)spawn();document.querySelector("#result").hidden=true;hud()}
-function hud(){document.querySelector("#wave").textContent=cacheCount()===0?"Найди оружие на рынке или подстанции":cacheCount()===1?"Найди второй тайник":"К метро · "+Math.round(Math.hypot(player.x-48,player.y-24)*4)+" м";document.querySelector("#gun").textContent=(player.slot+1)+" · "+guns[player.slot].name;document.querySelector("#money").textContent="₡ "+player.credits;document.querySelector("#trade").disabled=!nearGleb()||mode!=="play";document.querySelector("#health").textContent="♥ "+Math.ceil(player.hp)+" / 100";document.querySelector("#charge").textContent="ИМПУЛЬС "+Math.floor(player.charge)+"%";document.querySelector("#score").textContent=String(points).padStart(6,"0")+(streak>1?"   ×"+streak:"")}
-function finish(win){mode=win?"win":"lost";let el=document.querySelector("#result");el.hidden=false;el.querySelector("span").textContent=(win?"МЕТРО ОТКРЫТО":"СМЕНА ОКОНЧЕНА")+" · "+kills+" убито · "+points+" очков";tone(win?260:120,win?780:28,.55,"sawtooth")}
+function reset(){locationId=1;pumpProgress=[0,0];if(typeof resetVendor==="function")resetVendor();navKey=-1;camera.x=286;camera.y=172;mouse.seen=false;barrels=freshBarrels();blasts=[];player={x:.6,y:0,owned:[0],credits:100,slot:0,hp:100,charge:100,fire:0,dash:0,safe:0,dx:.707,dy:-.707,face:1,moving:false,lookAngle:0,lookIndex:0};foes=[];shots=[];fx=[];stains=[];rings=[];items=[];round=1;quota=waveSizes[0];spawned=kills=points=streak=comboTime=spawnIn=nextIn=time=shake=serial=0;mode="ready";keys.clear();mouse.down=false;for(let i=0;i<4;i++)spawn();document.querySelector("#result").hidden=true;hud()}
+function hud(){document.querySelector("#wave").textContent=locationId===2?depotHint():cacheCount()===0?"Найди оружие на рынке или подстанции":cacheCount()===1?"Найди второй тайник":"К метро · "+Math.round(Math.hypot(player.x-48,player.y-24)*4)+" м";document.querySelector("#gun").textContent=(player.slot+1)+" · "+guns[player.slot].name;document.querySelector("#money").textContent="₡ "+player.credits;document.querySelector("#trade").disabled=!nearGleb()||mode!=="play";document.querySelector("#health").textContent="♥ "+Math.ceil(player.hp)+" / 100";document.querySelector("#charge").textContent="ИМПУЛЬС "+Math.floor(player.charge)+"%";document.querySelector("#score").textContent=String(points).padStart(6,"0")+(streak>1?"   ×"+streak:"")}
+function finish(win){mode=win?"win":"lost";let el=document.querySelector("#result");el.hidden=false;el.querySelector("span").textContent=(win?"ЭВАКУАЦИЯ ЗАВЕРШЕНА":"СМЕНА ОКОНЧЕНА")+" · "+kills+" убито · "+points+" очков";tone(win?260:120,win?780:28,.55,"sawtooth")}
 const waveSizes=[24,32,40];
 function spawn(){
  const ahead=spawned%5!==4, offset=ahead?rnd(4.2,7.2):-rnd(3,5);
  let c;
  for(let j=0;j<12;j++){const a=j*Math.PI/6+spawned*2.4,px=player.x+Math.cos(a)*offset,py=player.y+Math.sin(a)*offset;if(road(px,py)){c=[px,py];break}}
+ if(!c&&locationId===2)c=depot.starts.reduce((a,b)=>Math.abs(Math.hypot(b[0]-player.x,b[1]-player.y)-6)<Math.abs(Math.hypot(a[0]-player.x,a[1]-player.y)-6)?b:a);
  if(!c)c=[avenues.reduce((a,b)=>Math.abs(b-player.x)<Math.abs(a-player.x)?b:a),clamp(player.y+offset,min,bounds.y)];
  const pattern=spawned%10;
  const boss=round===3&&spawned===0;
@@ -128,7 +161,7 @@ function fire(){
 }
 function step(dt){if(mode!=="play")return;time+=dt;const p=player;for(const k of ["fire","safe","dash"])p[k]=Math.max(0,p[k]-dt);p.charge=Math.min(100,p.charge+dt*3);shake=Math.max(0,shake-dt*22);comboTime-=dt;if(comboTime<=0)streak=0;
  const h=Number(keys.has("KeyD")||keys.has("ArrowRight"))-Number(keys.has("KeyA")||keys.has("ArrowLeft")),v=Number(keys.has("KeyS")||keys.has("ArrowDown"))-Number(keys.has("KeyW")||keys.has("ArrowUp"));const dx=h+v,dy=v-h,len=Math.hypot(dx,dy);p.moving=!!len;if(len){p.dx=dx/len;p.dy=dy/len;moveActor(p,p.dx*3.45*dt,p.dy*3.45*dt);if(h)p.face=h>0?1:2}
- collect();
+ if(locationId===2)depotMission(dt);else collect();
  if((mouse.down||keys.has("Space"))&&p.fire<=0)fire();
  for(const e of foes){if(e.hp<=0)continue;e.flash-=dt;e.strike-=dt;e.attack-=dt;e.walking=false;let dx=p.x-e.x,dy=p.y-e.y,d=Math.hypot(dx,dy)||.01;let speed=e.boss?.66:e.heavy?.72:1.02+.08*round;
  if(e.kind==="medic"&&e.attack<=0){
@@ -172,7 +205,8 @@ function step(dt){if(mode!=="play")return;time+=dt;const p=player;for(const k of
   for(let i=0;i<group;i++)spawn();
   spawnIn=round===1?1.1:.95
  }
- if(mode==="play"&&spawned===quota&&foes.length===0){
+ if(mode==="play"&&locationId===2&&drained()&&Math.hypot(p.x-depot.exit.x,p.y-depot.exit.y)<1.2){finish(true)}
+ if(mode==="play"&&locationId===1&&spawned===quota&&foes.length===0){
   if(round<3){
    nextIn+=dt;
    if(nextIn>1.2){
@@ -180,7 +214,7 @@ function step(dt){if(mode!=="play")return;time+=dt;const p=player;for(const k of
     p.hp=Math.min(100,p.hp+18);p.charge=100
    }
   }else if(cacheCount()===2&&Math.hypot(p.x-48,p.y-24)<2){
-   finish(true)
+   enterDepot()
   }
  }
  hud()

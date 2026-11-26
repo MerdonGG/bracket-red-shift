@@ -177,6 +177,58 @@ function cityBlock(x,y,i){
   solid(xx,yy,.7,.7,3,5,"#697572","#525c63","#43515b");let [px,py]=xy(xx+.35,yy+.35,7);rect(px-2,py-19,4,20,"#514651");ellipse(px,py-23,13,11,"#47675f");ellipse(px-4,py-26,8,7,"#608879")
  }
 }
+function drawDepot(t){
+ const [x,y]=xy(player.x,player.y);rect(x-1400,y-800,2800,1600,"#12242d");
+ const level=-6-4*pumpProgress.reduce((a,b)=>a+b,0);
+ plate(-4,-3,36,26,level,drained()?"#21464e":"#24515b");
+ for(let n=0;n<7;n++){
+  const wx=1+n*4;
+  solid(wx,-1.7,.4,.55,-7,52,"#879a96","#485c64","#324650");
+  const [lx,ly]=xy(wx,-1.6,39);rect(lx-4,ly-5,9,11,"#344953");rect(lx-2,ly-4,5,8,"#f6cc93");
+ }
+
+ for(let i=0;i<95;i++){
+  const rx=-3+((i*7.41+t*.00023)%33),ry=-2+(i*4.61)%23;
+  plate(rx,ry,.32+(i%5)*.15,.035,level+.4,"#44818a")
+ }
+ // Two stalled trains sit below the elevated service walkways.
+ for(const ty of [4.7,11.7]){
+  for(const rail of [ty+.2,ty+1.3])plate(8,rail,9,.09,-4,"#769295");
+  for(let i=0;i<2;i++){
+   const tx=8.7+i*4.3;solid(tx,ty,4,1.55,-4,19,"#7b9393","#39616a","#354d58");
+   for(let v=0;v<3;v++){
+    solid(tx+.35+v*1.25,ty+.45,.47,.46,15,3,"#9eb1ac","#687e80","#475e65");
+    for(let j=0;j<3;j++)plate(tx+.38+v*1.25+j*.12,ty+.48,.045,.33,18.2,"#556d70")
+   }
+   wall(tx,ty+1.55,15,false,()=>{rect(0,11,192,4,"#e69a5f");for(let k=6;k<177;k+=25){rect(k,3,19,7,"#203f50");rect(k+2,4,12,2,"#8bbab9")}})
+  }
+ }
+ function deck(r,bridge){
+  const [dx,dy,w,h]=r;solid(dx,dy,w,h,-5,5,bridge?"#718c85":"#65747b","#394a54","#2f424a");
+  for(let n=1;n<w;n++)line([xy(dx+n,dy,.2),xy(dx+n,dy+h,.2)],"#596871",1);
+  for(let n=1;n<h;n++)line([xy(dx,dy+n,.2),xy(dx+w,dy+n,.2)],"#596871",1);
+  for(let n=0;n<w;n+=2)for(let j=0;j<h;j++)plate(dx+n+.08,dy+j+.09,.048,.05,.3,"#a5aeab");
+  for(let n=0;n<w;n++){plate(dx+n,dy,.38,.09,.1,"#deb56e");plate(dx+n,dy+h-.1,.38,.09,.1,"#deb56e")}
+  for(let n=0;n<h;n++)plate(dx,dy+n,.11,.45,.1,"#deb56e")
+ }
+ depot.decks.forEach(r=>deck(r,false));if(drained())deck(depot.bridge,true);
+ depot.pumps.forEach((p,i)=>{
+  const c=pumpProgress[i]===1?"#8affca":"#ffc376";
+  solid(p.x-.52,p.y-.52,.66,.7,0,18,"#8fa29c","#537481","#355464");
+  const [px,py]=xy(p.x-.2,p.y-.2,20);ellipse(px,py,9,5,c);text(px-4,py+2,String.fromCharCode(65+i),"#253c40",11);
+  const [sx,sy]=xy(p.x,p.y);ellipse(sx,sy,28,12,c,true)
+ });
+ const [ex,ey]=xy(26,9);rect(ex-38,ey-54,3,47,"#394f55");rect(ex+31,ey-54,3,64,"#394f55");
+ rect(ex-47,ey-74,90,22,"#28353c");text(ex-42,ey-59,"ЭВАКУАЦИЯ",drained()?"#96ffbe":"#bbb59d",14);
+}
+function depotMap(){
+ const x=canvas.width-181,y=15,k=5.3,originX=x+9,originY=y+24;
+ rect(x-5,y-5,175,140,"#11262def");text(x+3,y+9,"ЗАТОПЛЕННОЕ ДЕПО","#b3e1dc",12);
+ for(const [rx,ry,w,h] of [...depot.decks,...(drained()?[depot.bridge]:[])])rect(originX+rx*k,originY+ry*k,w*k,h*k,"#768c91");
+ depot.pumps.forEach((p,i)=>text(originX+p.x*k-3,originY+p.y*k+4,i?"B":"A",pumpProgress[i]===1?"#99ffd0":"#ffcf80",13));
+ text(originX+26*k-3,originY+9*k+4,"Э","#a6ffd0",13);
+ ellipse(originX+player.x*k,originY+player.y*k,4,4,"#fff6d6")
+}
 function baseScene(t){
  const [px,py]=xy(player.x,player.y);rect(px-1500,py-900,3000,1800,"#202c37");
  plate(-18,-14,84,52,0,"#293440");
@@ -338,11 +390,11 @@ function draw(t){
  ctx.save();ctx.imageSmoothingEnabled=false;
  ctx.translate(480,270);ctx.scale(camera.zoom,camera.zoom);ctx.translate(-camera.x,-camera.y);
  if(shake>.1&&mode==="play")ctx.translate(rnd(-shake,shake)*.55,rnd(-shake,shake)*.55);
- baseScene(t);
+ if(locationId===2)drawDepot(t);else baseScene(t);
  for(let s of stains){let [x,y]=xy(s.x,s.y);ellipse(x,y,s.r,s.r*.45,"#751d39")}
  for(let i of items){let [x,y]=xy(i.x,i.y,4);rect(x-8,y-8,16,12,"#d5dbaf");rect(x-2,y-7,4,9,"#bd3244");rect(x-5,y-4,10,3,"#bd3244")}
  for(let r of rings){let [x,y]=xy(r.x,r.y,1),k=r.t/.45;ctx.globalAlpha=1-k;ellipse(x,y,217*k,99*k,"#a2ffd1",true);ctx.globalAlpha=1}
- let actors=[...barrels.filter(b=>b.live),...foes,van,gleb,player].sort((a,b)=>a.x+a.y-b.x-b.y);
+ let actors=[...barrels.filter(b=>b.live),...foes,...(locationId===1?[van,gleb]:[]),player].sort((a,b)=>a.x+a.y-b.x-b.y);
  for(let a of actors){if(a.hp<=0)continue;let [x,y]=xy(a.x,a.y),isPlayer=a===player;
  if(a.vehicle){drawVan(x,y);continue}
  if(a.trader){drawTrader(x,y,t);continue}
@@ -368,7 +420,7 @@ function draw(t){
  for(let b of blasts){const [x,y]=xy(b.x,b.y,5),k=b.t/.45;ctx.globalAlpha=1-k;ellipse(x,y,12+115*k,6+54*k,"#ffbd69",true);ellipse(x,y-15-27*k,9+29*(1-k),9+29*(1-k),"#fff0b4");ctx.globalAlpha=1} for(let f of fx){let [x,y]=xy(f.x,f.y,f.z);rect(x,y,f.size,f.size,f.ink)}
  if(streak>1&&comboTime>0){let [x,y]=xy(player.x,player.y,73);text(x-14,y,"×"+streak,"#ffcd78",18)}
  ctx.restore();
- miniMap();
+ if(locationId===2)depotMap();else miniMap();
  if(mode==="ready"){rect(18,15,362,50,"#171924eb");rect(18,15,4,50,"#fc6666");text(31,36,"ПРОРЫВ К МЕТРО","#ff967f",18);text(31,55,"Найди тайники 2 и 3. Выход — метро М.","#e8e0cd",12)}
 }
 function updateLook(dt){
